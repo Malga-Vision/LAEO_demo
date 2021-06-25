@@ -39,7 +39,7 @@ def initialize_zed_camera(input_file=None):
         :return:
         :zed (pyzed.sl.Camera): Camera object
     """
-
+    print(input_file)
     # Create a Camera object
     zed = sl.Camera()
 
@@ -202,6 +202,7 @@ if __name__=="__main__":
     ap.add_argument("-f", "--input-file", type=str, default=None, help="input a SVO file", required=False)
     config = ap.parse_args()
 
+    print(config.input_file)
     zed, run_parameters = initialize_zed_camera(input_file=config.input_file)
 
     if str(config.model).lower() == 'zed':
