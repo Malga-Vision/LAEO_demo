@@ -25,9 +25,8 @@
 import cv2
 import sys
 import pyzed.sl as sl
-import ogl_viewer.viewer as gl
-import cv_viewer.tracking_viewer as cv_viewer
-import numpy as np
+import source.ogl_viewer.viewer as gl
+import source.cv_viewer.tracking_viewer as cv_viewer
 
 if __name__=="__main__":
     print("Running Body Tracking sample ... Press 'q' to quit")

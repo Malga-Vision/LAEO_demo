@@ -25,11 +25,10 @@
 import argparse
 
 import cv2
-import sys
 import pyzed.sl as sl
-import ogl_viewer.viewer as gl
-import cv_viewer.tracking_viewer as cv_viewer
-import numpy as np
+import source.ogl_viewer.viewer as gl
+import source.cv_viewer.tracking_viewer as cv_viewer
+
 
 def initialize_zed_camera(input_file=None):
     """Create a Camera object, set the configurations parameters and open the camera
@@ -137,12 +136,12 @@ def extract_keypoints_zedcam(zed):
 
 
             for person in bodies.object_list:
-                keypoints = person.keypoint_2d()
-                confidence = person.confidence()
-                bbox_3d = person.head_bounding_box()
+                keypoints = person.keypoint_2d
+                confidence = person.confidence
+                bbox_3d = person.head_bounding_box
 
             # Update GL view
-            viewer.update_view(image, bodies)
+            viewer.update_view(image, bodies) # it draws stuff
             # Update OCV view
             image_left_ocv = image.get_data()
             cv_viewer.render_2D(image_left_ocv, image_scale, bodies.object_list, obj_param.enable_tracking)
@@ -157,6 +156,13 @@ def extract_keypoints_zedcam(zed):
     zed.disable_object_detection()
     zed.disable_positional_tracking()
     zed.close()
+
+    with open('report_file.txt', 'w') as f:
+        f.write(str(keypoints))
+        f.write('/n')
+        f.write(str(confidence))
+        f.write('/n')
+        f.write(str(bbox_3d))
 
 
 
