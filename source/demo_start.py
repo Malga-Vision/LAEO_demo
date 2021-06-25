@@ -136,7 +136,7 @@ def extract_keypoints_zedcam(zed):
             zed.retrieve_objects(bodies, obj_runtime_param)
 
 
-            for person in bodies.object_list():
+            for person in bodies.object_list:
                 keypoints = person.keypoint_2d()
                 confidence = person.confidence()
                 bbox_3d = person.head_bounding_box()
