@@ -3,11 +3,11 @@ import os
 import numpy as np
 import tensorflow as tf
 import cv2
-from src.camera.intialize_camera import initialize_zed_camera
+from intialize_camera import initialize_zed_camera
 import pyzed.sl as sl
-from src.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel
-from src.utils.my_utils import retrieve_xyz_from_detection, compute_distance
-from src.ai.detection import detect
+from source.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel
+from source.utils.my_utils import retrieve_xyz_from_detection, compute_distance
+from source.ai.detection import detect
 
 
 if __name__ == "__main__":
