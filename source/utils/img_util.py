@@ -3,7 +3,7 @@ import os
 import json
 import numpy as np
 from math import cos, sin, pi
-from src.utils.labels import coco_category_index, rgb_colors, color_pose, color_pose_normalized, pose_id_part, face_category_index, body_parts_openpose, body_parts, face_points, face_points_openpose
+from source.utils.labels import coco_category_index, rgb_colors, color_pose, color_pose_normalized, pose_id_part, face_category_index, body_parts_openpose, body_parts, face_points, face_points_openpose
 # from src.utils.my_utils import fit_plane_least_square  # , retrieve_line_from_two_points
 
 

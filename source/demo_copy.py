@@ -117,48 +117,34 @@ def extract_keypoints_zedcam(zed):
 
     # Get ZED camera information
     camera_info = zed.get_camera_information()
-
-    # 2D viewer utilities
     display_resolution = sl.Resolution(min(camera_info.camera_resolution.width, 1280),
                                        min(camera_info.camera_resolution.height, 720))
-    image_scale = [display_resolution.width / camera_info.camera_resolution.width
-        , display_resolution.height / camera_info.camera_resolution.height]
-
-    # Create OpenGL viewer
-    viewer = gl.GLViewer()
-    viewer.init(camera_info.calibration_parameters.left_cam, obj_param.enable_tracking)
 
     # Create ZED objects filled in the main loop
     bodies = sl.Objects()
     image = sl.Mat()
 
-    keypoints = None
-    confidence = None
-    bbox_3d = None
 
-    while viewer.is_available():
-        # Grab an image
-        if zed.grab() == sl.ERROR_CODE.SUCCESS:
-            # Retrieve left image
-            zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
-            # Retrieve objects
-            # zed.retrieve_objects(bodies, obj_runtime_param)
+    # Grab an image
+    while zed.grab() == sl.ERROR_CODE.SUCCESS:
+        # Retrieve left image
+        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+        # Retrieve objects
+        # zed.retrieve_objects(bodies, obj_runtime_param)
 
-            # the 'q' button is set as the
-            # quitting button you may use any
-            # desired button of your choice
-            if cv2.waitKey(1) & 0xFF==ord('q'):
-                break
+        # the 'q' button is set as the
+        # quitting button you may use any
+        # desired button of your choice
+        if cv2.waitKey(1) & 0xFF==ord('q'):
+            break
 
-            cv2.imshow("ZED | 2D View", image)
+        cv2.imshow("ZED | 2D View", image)
 
 
     image.free(sl.MEM.CPU)
     cv2.destroyAllWindows()
 
     # Disable modules and close camera
-    zed.disable_object_detection()
-    zed.disable_positional_tracking()
     zed.close()
 
     with open('report_file.txt', 'w') as f:

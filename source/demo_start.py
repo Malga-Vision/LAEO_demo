@@ -257,6 +257,7 @@ if __name__ == "__main__":
     print(config.input_file)
     zed, run_parameters = initialize_zed_camera(input_file=config.input_file)
 
+
     if str(config.model).lower() == 'zed':
         extract_keypoints_zedcam(zed=zed)  # everything performed with stereilabs SDK
     elif str(config.model).lower() == 'centernet':

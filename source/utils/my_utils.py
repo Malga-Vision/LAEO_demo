@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.spatial import distance as dist
-from src.utils.labels import pose_id_part, pose_id_part_openpose, rev_pose_id_part_openpose, rev_pose_id_part
+from source.utils.labels import pose_id_part, pose_id_part_openpose, rev_pose_id_part_openpose, rev_pose_id_part
 import cv2
 import os
 import json
