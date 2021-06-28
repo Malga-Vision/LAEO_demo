@@ -132,13 +132,16 @@ def extract_keypoints_zedcam(zed):
         # Retrieve objects
         # zed.retrieve_objects(bodies, obj_runtime_param)
 
+        img = np.array(image.get_data()[:, :, :3])
+
+        cv2.imshow("ZED | 2D View", img)
+
         # the 'q' button is set as the
         # quitting button you may use any
         # desired button of your choice
         if cv2.waitKey(1) & 0xFF==ord('q'):
             break
 
-        cv2.imshow("ZED | 2D View", image)
 
 
     image.free(sl.MEM.CPU)
@@ -188,7 +191,7 @@ def myfunct():
 # LEFT_EAR
 
 
-def extract_keypoints_centernet(model):
+def extract_keypoints_centernet(model, zed):
     input_shape_od_model = (512, 512)
 
     zed, runtime_parameters = initialize_zed_camera()
@@ -196,34 +199,42 @@ def extract_keypoints_centernet(model):
 
     # params
     min_score_thresh, max_boxes_to_draw, min_distance = .45, 50, 1.5
-    i = 15
-    while True:
-        if zed.grab(runtime_parameters) == sl.ERROR_CODE.SUCCESS:  # A new image is available if grab() returns SUCCESS
 
-            zed.retrieve_image(image, sl.VIEW.LEFT)  # Retrieve left image
-            # zed.retrieve_image(depth_image, sl.VIEW.DEPTH)
-            # zed.retrieve_measure(point_cloud, sl.MEASURE.XYZRGBA) # Colored point cloud. Each pixel contains 4 float (X, Y, Z, color)
+    # camera_info = zed.get_camera_information()
+    # display_resolution = sl.Resolution(min(camera_info.camera_resolution.width, 1280),
+    #                                    min(camera_info.camera_resolution.height, 720))
 
-            # pc_img = point_cloud.get_data()[:, :, :3]
-            img = np.array(image.get_data()[:, :, :3])
+    while zed.grab() == sl.ERROR_CODE.SUCCESS:
+        # Retrieve left image
+        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU)
+        # Retrieve objects
+        # zed.retrieve_objects(bodies, obj_runtime_param)
 
-            img, new_old_shape = resize_preserving_ar(img, input_shape_od_model)
-            detections, elapsed_time = detect(model, img, min_score_thresh, new_old_shape)  # detection classes boxes scores
-            img_with_detections = draw_detections(img, detections, max_boxes_to_draw, None, None, None)
-            cv2.imshow("aa", img_with_detections)
+        img = np.array(image.get_data()[:, :, :3])
 
-            det, kpt = percentage_to_pixel(img.shape, detections['detection_boxes'], detections['detection_scores'],
-                                           detections['detection_keypoints'], detections['detection_keypoint_scores'])
+        img, new_old_shape = resize_preserving_ar(img, input_shape_od_model)
+        detections, elapsed_time = detect(model, img, min_score_thresh, new_old_shape)  # detection classes boxes scores
+        img_with_detections = draw_detections(img, detections, max_boxes_to_draw, None, None, None)
 
-            # XYZ = retrieve_xyz_from_detection(detections['detection_boxes_centroid'], pc_img)
-            # _, violate, couple_points = compute_distance(XYZ, min_distance)
-            # img_with_violations = draw_detections(img, detections, max_boxes_to_draw, violate, couple_points)
+        det, kpt = percentage_to_pixel(img.shape, detections['detection_boxes'], detections['detection_scores'],
+                                       detections['detection_keypoints'], detections['detection_keypoint_scores'])
 
-            # cv2.imshow("aa", img_with_violations)
-            # cv2.waitKey(0)
-            i += 1
 
-    zed.close()  # Close the camera
+        cv2.imshow("ZED | 2D View", img)
+
+        # the 'q' button is set as the
+        # quitting button you may use any
+        # desired button of your choice
+        if cv2.waitKey(1) & 0xFF==ord('q'):
+            break
+
+
+
+    image.free(sl.MEM.CPU)
+    cv2.destroyAllWindows()
+
+    # Disable modules and close camera
+    zed.close()
 
 
 
@@ -245,7 +256,7 @@ if __name__ == "__main__":
         path_to_model = ''
         tf.keras.backend.clear_session()
         model = tf.saved_model.load(os.path.join(config.model, 'saved_model'))
-        extract_keypoints_centernet(path_to_model)
+        extract_keypoints_centernet(path_to_model, zed)
         raise NotImplementedError
     elif str(config.model).lower() == 'openpose':
         print('openpose')
