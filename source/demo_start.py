@@ -26,8 +26,8 @@ import argparse
 
 import cv2
 import pyzed.sl as sl
-import source.ogl_viewer.viewer as gl
-import source.cv_viewer.tracking_viewer as cv_viewer
+import ogl_viewer.viewer as gl
+import cv_viewer.tracking_viewer as cv_viewer
 
 
 def initialize_zed_camera(input_file=None):
@@ -63,7 +63,7 @@ def initialize_zed_camera(input_file=None):
 
     # Open the camera
     err = zed.open(init_params)
-    if err!=sl.ERROR_CODE.SUCCESS:
+    if err != sl.ERROR_CODE.SUCCESS:
         exit(1)
 
     # Create and set RuntimeParameters after opening the camera
@@ -79,12 +79,14 @@ def initialize_zed_camera(input_file=None):
 
     return zed, runtime_parameters
 
+
 def load_image():
     pass
 
 
 def infer_ypr():
     pass
+
 
 def extract_keypoints_zedcam(zed):
     """Zed Cam starts and extracts keypoints with stereolabs SDK object detector.
@@ -126,28 +128,31 @@ def extract_keypoints_zedcam(zed):
     bodies = sl.Objects()
     image = sl.Mat()
 
+    keypoints = None
+    confidence = None
+    bbox_3d = None
+
     while viewer.is_available():
         # Grab an image
-        if zed.grab()==sl.ERROR_CODE.SUCCESS:
+        if zed.grab() == sl.ERROR_CODE.SUCCESS:
             # Retrieve left image
             zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
             # Retrieve objects
             zed.retrieve_objects(bodies, obj_runtime_param)
 
+            # Update GL view
+            viewer.update_view(image, bodies)  # it draws stuff
+            # Update OCV view
+            image_left_ocv = image.get_data()
+            cv_viewer.render_2D(image_left_ocv, image_scale, bodies.object_list, obj_param.enable_tracking)
+            cv2.imshow("ZED | 2D View", image_left_ocv)
 
             for person in bodies.object_list:
                 keypoints = person.keypoint_2d
                 confidence = person.confidence
                 bbox_3d = person.head_bounding_box
 
-            # Update GL view
-            viewer.update_view(image, bodies) # it draws stuff
-            # Update OCV view
-            image_left_ocv = image.get_data()
-            cv_viewer.render_2D(image_left_ocv, image_scale, bodies.object_list, obj_param.enable_tracking)
-            cv2.imshow("ZED | 2D View", image_left_ocv)
             cv2.waitKey(10)
-
 
     viewer.exit()
     image.free(sl.MEM.CPU)
@@ -159,11 +164,10 @@ def extract_keypoints_zedcam(zed):
 
     with open('report_file.txt', 'w') as f:
         f.write(str(keypoints))
-        f.write('/n')
+        f.write('\n')
         f.write(str(confidence))
-        f.write('/n')
+        f.write('\n')
         f.write(str(bbox_3d))
-
 
 
 def compute_laeo():
@@ -172,6 +176,7 @@ def compute_laeo():
 
 def save_files():
     pass
+
 
 def myfunct():
     pass
@@ -198,9 +203,7 @@ def myfunct():
 # LEFT_EAR
 
 
-
-
-if __name__=="__main__":
+if __name__ == "__main__":
     print("Running Body Tracking sample ... Press 'q' to quit")
 
     ap = argparse.ArgumentParser()
@@ -212,15 +215,13 @@ if __name__=="__main__":
     zed, run_parameters = initialize_zed_camera(input_file=config.input_file)
 
     if str(config.model).lower() == 'zed':
-        extract_keypoints_zedcam(zed=zed) # everything performed with stereilabs SDK
+        extract_keypoints_zedcam(zed=zed)  # everything performed with stereilabs SDK
     elif str(config.model).lower() == 'centernet':
         print('centernet')
         raise NotImplementedError
-    elif str(config.model).lower()=='openpose':
+    elif str(config.model).lower() == 'openpose':
         print('openpose')
         raise NotImplementedError
     else:
         print('wrong input for model value')
-        raise IOError # probably not correct error
-
-
+        raise IOError  # probably not correct error

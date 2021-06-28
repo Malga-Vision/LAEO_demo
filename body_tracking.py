@@ -25,8 +25,8 @@
 import cv2
 import sys
 import pyzed.sl as sl
-import source.ogl_viewer.viewer as gl
-import source.cv_viewer.tracking_viewer as cv_viewer
+import ogl_viewer.viewer as gl
+import cv_viewer.tracking_viewer as cv_viewer
 
 if __name__=="__main__":
     print("Running Body Tracking sample ... Press 'q' to quit")
@@ -57,7 +57,7 @@ if __name__=="__main__":
     # Enable Positional tracking (mandatory for object detection)
     positional_tracking_parameters = sl.PositionalTrackingParameters()
     # If the camera is static, uncomment the following line to have better performances and boxes sticked to the ground.
-    # positional_tracking_parameters.set_as_static = True
+    positional_tracking_parameters.set_as_static = True
     zed.enable_positional_tracking(positional_tracking_parameters)
 
     obj_param = sl.ObjectDetectionParameters()
