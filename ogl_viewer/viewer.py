@@ -5,7 +5,6 @@ from OpenGL.GLUT import *
 from threading import Lock
 from cv_viewer.utils import *
 import numpy as np
-import sys
 import array
 import math
 import ctypes
