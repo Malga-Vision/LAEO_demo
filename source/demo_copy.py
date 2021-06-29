@@ -29,8 +29,8 @@ import numpy as np
 import pyzed.sl as sl
 import ogl_viewer.viewer as gl
 import cv_viewer.tracking_viewer as cv_viewer
-from source.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel
-from source.utils.my_utils import retrieve_xyz_from_detection, compute_distance
+from source.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose
+from source.utils.my_utils import retrieve_xyz_from_detection, compute_distance, save_key_points_to_json
 from source.ai.detection import detect
 
 
@@ -101,7 +101,6 @@ def extract_keypoints_zedcam(zed):
     positional_tracking_parameters = sl.PositionalTrackingParameters()
     # If the camera is static, uncomment the following line to have better performances and boxes sticked to the ground.
     positional_tracking_parameters.set_as_static = True
-
     zed.enable_positional_tracking(positional_tracking_parameters)
 
     obj_param = sl.ObjectDetectionParameters()
@@ -117,6 +116,7 @@ def extract_keypoints_zedcam(zed):
 
     # Get ZED camera information
     camera_info = zed.get_camera_information()
+
     display_resolution = sl.Resolution(min(camera_info.camera_resolution.width, 1280),
                                        min(camera_info.camera_resolution.height, 720))
 
@@ -127,10 +127,12 @@ def extract_keypoints_zedcam(zed):
 
     # Grab an image
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
-        # Retrieve left image
+        # Retrieve left image, image is unsigned char of 4 channels
         zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
         # Retrieve objects
-        # zed.retrieve_objects(bodies, obj_runtime_param)
+        zed.retrieve_objects(bodies, obj_runtime_param)
+
+        # here we have bodies, extract and print
 
         img = np.array(image.get_data()[:, :, :3])
 
@@ -141,6 +143,7 @@ def extract_keypoints_zedcam(zed):
         # desired button of your choice
         if cv2.waitKey(1) & 0xFF==ord('q'):
             break
+
 
 
 
@@ -212,22 +215,31 @@ def extract_keypoints_centernet(model, zed):
 
         img = np.array(image.get_data()[:, :, :3])
 
-        img, new_old_shape = resize_preserving_ar(img, input_shape_od_model)
-        detections, elapsed_time = detect(model, img, min_score_thresh, new_old_shape)  # detection classes boxes scores
-        img_with_detections = draw_detections(img, detections, max_boxes_to_draw, None, None, None)
+            img_resized, new_old_shape = resize_preserving_ar(img, input_shape_od_model)
+            detections, elapsed_time = detect(model, img, min_score_thresh, new_old_shape)  # detection classes boxes scores
+            # probably to draw on resized
+            img_with_detections = draw_detections(img, detections, max_boxes_to_draw, None, None, None)
+            cv2.imshow("aa", img_with_detections)
 
         det, kpt = percentage_to_pixel(img.shape, detections['detection_boxes'], detections['detection_scores'],
                                        detections['detection_keypoints'], detections['detection_keypoint_scores'])
 
+            for i in range(len(det)):
+                img_drawn = draw_key_points_pose(img, kpt[i])
 
-        cv2.imshow("ZED | 2D View", img)
+            cv2.imshow('bb', img_drawn)
 
-        # the 'q' button is set as the
-        # quitting button you may use any
-        # desired button of your choice
-        if cv2.waitKey(1) & 0xFF==ord('q'):
-            break
+            # the 'q' button is set as the
+            # quitting button you may use any
+            # desired button of your choice
+            if cv2.waitKey(1) & 0xFF==ord('q'):
+                break
 
+            # save_key_points_to_json(kpts, path_json + ".json")
+
+            # XYZ = retrieve_xyz_from_detection(detections['detection_boxes_centroid'], pc_img)
+            # _, violate, couple_points = compute_distance(XYZ, min_distance)
+            # img_with_violations = draw_detections(img, detections, max_boxes_to_draw, violate, couple_points)
 
 
     image.free(sl.MEM.CPU)
