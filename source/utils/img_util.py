@@ -573,3 +573,49 @@ def draw_cones(yaw, pitch, roll, unc_yaw, unc_pitch, unc_roll, image=None, tdx=N
 
     list_projection_xy = [sin(yaw), -cos(yaw) * sin(pitch)]
     return list_projection_xy, image
+
+def draw_axis_3d(yaw, pitch, roll, image=None, tdx=None, tdy=None, size=50, yaw_uncertainty=-1, pitch_uncertainty=-1, roll_uncertainty=-1):
+    """
+    Draw yaw pitch and roll axis on the image if passed as input and returns the vector containing the projection of the vector on the image plane
+    Args:
+        :yaw (float): value that represents the yaw rotation of the face
+        :pitch (float): value that represents the pitch rotation of the face
+        :roll (float): value that represents the roll rotation of the face
+        :image (numpy.ndarray): The image where the three vector will be printed
+            (default is None)
+        :tdx (float64): x coordinate from where the vector drawing start expressed in pixel coordinates
+            (default is None)
+        :tdy (float64): y coordinate from where the vector drawing start expressed in pixel coordinates
+            (default is None)
+        :size (int): value that will be multiplied to each x, y and z value that enlarge the "vector drawing"
+            (default is 50)
+    Returns:
+        :list_projection_xy (list): list containing the unit vector [x, y, z]
+    """
+    pitch = pitch * np.pi / 180
+    yaw = -(yaw * np.pi / 180)
+    roll = roll * np.pi / 180
+    # print(yaw, pitch, roll)
+    if tdx != None and tdy != None:
+        tdx = tdx
+        tdy = tdy
+    else:
+        height, width = image.shape[:2]
+        tdx = width / 2
+        tdy = height / 2
+    # PROJECT 3D TO 2D XY plane (Z = 0)
+    # X-Axis pointing to right. drawn in red
+    x1 = size * (cos(yaw) * cos(roll)) + tdx
+    y1 = size * (cos(pitch) * sin(roll) + cos(roll) * sin(pitch) * sin(yaw)) + tdy
+    # Y-Axis | drawn in green
+    x2 = size * (-cos(yaw) * sin(roll)) + tdx
+    y2 = size * (cos(pitch) * cos(roll) - sin(pitch) * sin(yaw) * sin(roll)) + tdy
+    # Z-Axis (out of the screen) drawn in blue
+    x3 = size * (sin(yaw)) + tdx
+    y3 = size * (-cos(yaw) * sin(pitch)) + tdy
+    z3 = size * (cos(pitch) * cos(yaw)) + tdy
+    if image is not None:
+        cv2.line(image, (int(tdx), int(tdy)), (int(x1), int(y1)), (0, 0, 255), 2)
+        cv2.line(image, (int(tdx), int(tdy)), (int(x2), int(y2)), (0, 255, 0), 2)
+        cv2.line(image, (int(tdx), int(tdy)), (int(x3), int(y3)), (255, 0, 0), 2)
+    return image

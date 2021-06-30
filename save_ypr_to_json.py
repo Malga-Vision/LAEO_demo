@@ -4,8 +4,8 @@ import cv2
 import os
 import math
 import numpy as np
-from src.utils.img_util import draw_key_points_pose, draw_axis, draw_cones
-from src.utils.my_utils import normalize_wrt_maximum_distance_point, initialize_video_recorder, retrieve_interest_points, load_poses_from_json, load_poses_from_json1, ypr_to_json
+from source.utils.img_util import draw_key_points_pose, draw_axis, draw_cones
+from source.utils.my_utils import normalize_wrt_maximum_distance_point, initialize_video_recorder, retrieve_interest_points, load_poses_from_json, load_poses_from_json1, ypr_to_json
 from pathlib import Path
 
 if __name__ == "__main__":
