@@ -43,3 +43,24 @@ def head_pose_estimation(kpt, detector, gaze_model, id_list=None):
         # draw_axis(yaw.numpy(), pitch.numpy(), roll.numpy(), im_pose, tdx, tdy)
     return center_xy, yaw_list, pitch_list, roll_list
 
+def hpe(gaze_model, kpt_person, detector):
+    # TODO here change order if openpose
+    face_kpt = retrieve_interest_points(kpt_person, detector=detector)
+
+    tdx = np.mean([face_kpt[k] for k in range(0, 15, 3) if face_kpt[k] != 0.0])
+    tdy = np.mean([face_kpt[k + 1] for k in range(0, 15, 3) if face_kpt[k + 1] != 0.0])
+    if math.isnan(tdx) or math.isnan(tdy):
+        tdx = -1
+        tdy = -1
+
+    # center_xy.append([tdx, tdy])
+    face_kpt_normalized = np.array(normalize_wrt_maximum_distance_point(face_kpt))
+    # print(type(face_kpt_normalized), face_kpt_normalized)
+
+    aux = tf.cast(np.expand_dims(face_kpt_normalized, 0), tf.float32)
+
+    yaw, pitch, roll = gaze_model(aux, training=False)
+
+    return yaw, pitch, roll, tdx, tdy
+
+

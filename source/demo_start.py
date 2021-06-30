@@ -1,37 +1,23 @@
-########################################################################
-#
-# Copyright (c) 2021, STEREOLABS.
-#
-# All rights reserved.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-########################################################################
-
 """
    This sample shows how to detect a human bodies and draw their
    modelised skeleton in an OpenGL window
 """
 import argparse
+import math
+import os
 
 import cv2
 import numpy as np
 import pyzed.sl as sl
+import tensorflow as tf
 import ogl_viewer.viewer as gl
 import cv_viewer.tracking_viewer as cv_viewer
-from source.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel
-from source.utils.my_utils import retrieve_xyz_from_detection, compute_distance
+from source.utils.hpe import head_pose_estimation
+from source.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
+    draw_axis, draw_axis_3d
+from source.utils.my_utils import retrieve_xyz_from_detection, compute_distance, save_key_points_to_json
 from source.ai.detection import detect
+from source.utils.my_utils import normalize_wrt_maximum_distance_point, retrieve_interest_points
 
 
 def initialize_zed_camera(input_file=None):
@@ -42,7 +28,6 @@ def initialize_zed_camera(input_file=None):
         :return:
         :zed (pyzed.sl.Camera): Camera object
     """
-    print(input_file)
     # Create a Camera object
     zed = sl.Camera()
 
@@ -68,6 +53,7 @@ def initialize_zed_camera(input_file=None):
     # Open the camera
     err = zed.open(init_params)
     if err != sl.ERROR_CODE.SUCCESS:
+        print('zedcam has problems')
         exit(1)
 
     # Create and set RuntimeParameters after opening the camera
@@ -101,7 +87,6 @@ def extract_keypoints_zedcam(zed):
     positional_tracking_parameters = sl.PositionalTrackingParameters()
     # If the camera is static, uncomment the following line to have better performances and boxes sticked to the ground.
     positional_tracking_parameters.set_as_static = True
-
     zed.enable_positional_tracking(positional_tracking_parameters)
 
     obj_param = sl.ObjectDetectionParameters()
@@ -118,60 +103,44 @@ def extract_keypoints_zedcam(zed):
     # Get ZED camera information
     camera_info = zed.get_camera_information()
 
-    # 2D viewer utilities
     display_resolution = sl.Resolution(min(camera_info.camera_resolution.width, 1280),
                                        min(camera_info.camera_resolution.height, 720))
-    image_scale = [display_resolution.width / camera_info.camera_resolution.width
-        , display_resolution.height / camera_info.camera_resolution.height]
-
-    # Create OpenGL viewer
-    viewer = gl.GLViewer()
-    viewer.init(camera_info.calibration_parameters.left_cam, obj_param.enable_tracking)
 
     # Create ZED objects filled in the main loop
     bodies = sl.Objects()
     image = sl.Mat()
 
-    keypoints = None
-    confidence = None
-    bbox_3d = None
+    # Grab an image
+    while zed.grab() == sl.ERROR_CODE.SUCCESS:
+        # Retrieve left image, image is unsigned char of 4 channels
+        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+        # Retrieve objects
+        zed.retrieve_objects(bodies, obj_runtime_param)
 
-    while viewer.is_available():
-        # Grab an image
-        if zed.grab() == sl.ERROR_CODE.SUCCESS:
-            # Retrieve left image
-            zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
-            # Retrieve objects
-            zed.retrieve_objects(bodies, obj_runtime_param)
+        # here we have bodies, extract and print
 
-            # Update GL view
-            viewer.update_view(image, bodies)  # it draws stuff
-            # Update OCV view
-            image_left_ocv = image.get_data()
-            cv_viewer.render_2D(image_left_ocv, image_scale, bodies.object_list, obj_param.enable_tracking)
-            cv2.imshow("ZED | 2D View", image_left_ocv)
+        img = np.array(image.get_data()[:, :, :3])
 
-            for person in bodies.object_list:
-                keypoints = person.keypoint_2d
-                confidence = person.confidence
-                bbox_3d = person.head_bounding_box
+        cv2.imshow("ZED | 2D View", img)
 
-            cv2.waitKey(10)
+        # the 'q' button is set as the
+        # quitting button you may use any
+        # desired button of your choice
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-    viewer.exit()
     image.free(sl.MEM.CPU)
+    cv2.destroyAllWindows()
 
     # Disable modules and close camera
-    zed.disable_object_detection()
-    zed.disable_positional_tracking()
     zed.close()
 
-    with open('report_file.txt', 'w') as f:
-        f.write(str(keypoints))
-        f.write('\n')
-        f.write(str(confidence))
-        f.write('\n')
-        f.write(str(bbox_3d))
+    # with open('report_file.txt', 'w') as f:
+    #     f.write(str(keypoints))
+    #     f.write('\n')
+    #     f.write(str(confidence))
+    #     f.write('\n')
+    #     f.write(str(bbox_3d))
 
 
 def compute_laeo():
@@ -207,66 +176,121 @@ def myfunct():
 # LEFT_EAR
 
 
-def extract_keypoints_centernet(model):
+def extract_keypoints_centernet(model, zed):
     input_shape_od_model = (512, 512)
 
-    zed, runtime_parameters = initialize_zed_camera()
     image, depth_image, point_cloud = sl.Mat(), sl.Mat(), sl.Mat()
 
     # params
     min_score_thresh, max_boxes_to_draw, min_distance = .45, 50, 1.5
-    i = 15
-    while True:
-        if zed.grab(runtime_parameters) == sl.ERROR_CODE.SUCCESS:  # A new image is available if grab() returns SUCCESS
 
-            zed.retrieve_image(image, sl.VIEW.LEFT)  # Retrieve left image
-            # zed.retrieve_image(depth_image, sl.VIEW.DEPTH)
-            # zed.retrieve_measure(point_cloud, sl.MEASURE.XYZRGBA) # Colored point cloud. Each pixel contains 4 float (X, Y, Z, color)
+    camera_info = zed.get_camera_information()
+    display_resolution = sl.Resolution(min(camera_info.camera_resolution.width, 1280),
+                                       min(camera_info.camera_resolution.height, 720))
 
-            # pc_img = point_cloud.get_data()[:, :, :3]
-            img = np.array(image.get_data()[:, :, :3])
+    while zed.grab() == sl.ERROR_CODE.SUCCESS:
+        # Retrieve left image
+        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+        # Retrieve objects
+        # zed.retrieve_objects(bodies, obj_runtime_param)
 
-            img, new_old_shape = resize_preserving_ar(img, input_shape_od_model)
-            detections, elapsed_time = detect(model, img, min_score_thresh, new_old_shape)  # detection classes boxes scores
-            img_with_detections = draw_detections(img, detections, max_boxes_to_draw, None, None, None)
-            cv2.imshow("aa", img_with_detections)
+        img = np.array(image.get_data()[:, :, :3])
 
-            det, kpt = percentage_to_pixel(img.shape, detections['detection_boxes'], detections['detection_scores'],
-                                           detections['detection_keypoints'], detections['detection_keypoint_scores'])
+        img_resized, new_old_shape = resize_preserving_ar(img, input_shape_od_model)
+        detections, elapsed_time = detect(model, img_resized, min_score_thresh, new_old_shape)  # detection classes boxes scores
+        # probably to draw on resized
+        img_with_detections = draw_detections(img_resized, detections, max_boxes_to_draw, None, None, None)
+        # cv2.imshow("aa", img_with_detections)
 
-            # XYZ = retrieve_xyz_from_detection(detections['detection_boxes_centroid'], pc_img)
-            # _, violate, couple_points = compute_distance(XYZ, min_distance)
-            # img_with_violations = draw_detections(img, detections, max_boxes_to_draw, violate, couple_points)
+        det, kpt = percentage_to_pixel(img.shape, detections['detection_boxes'], detections['detection_scores'],
+                                       detections['detection_keypoints'], detections['detection_keypoint_scores'])
 
-            # cv2.imshow("aa", img_with_violations)
-            # cv2.waitKey(0)
-            i += 1
+        # call HPE
+        gaze_model = tf.keras.models.load_model('models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
+        # center_xy, yaw, pitch, roll = head_pose_estimation(kpt, 'centernet', gaze_model=gaze_model)
 
-    zed.close()  # Close the camera
+        for j, kpt_person in enumerate(kpt):
+            # TODO here change order if openpose
+            face_kpt = retrieve_interest_points(kpt_person, detector='centernet')
 
+            tdx = np.mean([face_kpt[k] for k in range(0, 15, 3) if face_kpt[k] != 0.0])
+            tdy = np.mean([face_kpt[k + 1] for k in range(0, 15, 3) if face_kpt[k + 1] != 0.0])
+            if math.isnan(tdx) or math.isnan(tdy):
+                tdx = -1
+                tdy = -1
+
+            # center_xy.append([tdx, tdy])
+            face_kpt_normalized = np.array(normalize_wrt_maximum_distance_point(face_kpt))
+            # print(type(face_kpt_normalized), face_kpt_normalized)
+
+            aux = tf.cast(np.expand_dims(face_kpt_normalized, 0), tf.float32)
+
+            yaw, pitch, roll = gaze_model(aux, training=False)
+
+            print('yaw = {}'.format(yaw))
+            print('yaw[0].numpy()[0] = {}'.format(yaw[0].numpy()[0]))
+            print(tdx)
+
+            img = draw_axis_3d(yaw[0].numpy()[0], pitch[0].numpy()[0], roll[0].numpy()[0], image=img, tdx=tdx, tdy=tdy, size=50)
+
+        # call LAEO
+
+        for i in range(len(det)):
+            # img = draw_key_points_pose(img, kpt[i])
+            try:
+                print(yaw)
+                print(np.shape(yaw))
+
+            except:
+                pass
+            # img = draw_axis(yaw[i], pitch[i], roll[i], image=img, tdx=center_xy[0], tdy=center_xy[1], size=50) #single person
+
+        print(type(img))
+        cv2.imshow('bb', img)
+
+        # the 'q' button is set as the
+        # quitting button you may use any
+        # desired button of your choice
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        # save_key_points_to_json(kpts, path_json + ".json")
+
+        # XYZ = retrieve_xyz_from_detection(detections['detection_boxes_centroid'], pc_img)
+        # _, violate, couple_points = compute_distance(XYZ, min_distance)
+        # img_with_violations = draw_detections(img, detections, max_boxes_to_draw, violate, couple_points)
+
+    image.free(sl.MEM.CPU)
+    cv2.destroyAllWindows()
+
+    # Disable modules and close camera
+    zed.close()
 
 
 if __name__ == "__main__":
-    print("Running Body Tracking sample ... Press 'q' to quit")
 
     ap = argparse.ArgumentParser()
     ap.add_argument("-m", "--model", type=str, default=None, help="path to the model", required=True)
     ap.add_argument("-f", "--input-file", type=str, default=None, help="input a SVO file", required=False)
     config = ap.parse_args()
 
-    print(config.input_file)
+    if config.input_file is not None:
+        print('video file {}'.format(config.input_file))
+    else:
+        print('real time camera acquisition')
     zed, run_parameters = initialize_zed_camera(input_file=config.input_file)
 
-
     if str(config.model).lower() == 'zed':
-        extract_keypoints_zedcam(zed=zed)  # everything performed with stereilabs SDK
+        print('start zedcam keypoint extractor')
+        extract_keypoints_zedcam(zed=zed)  # everything performed with stereolabs SDK
     elif str(config.model).lower() == 'centernet':
         print('centernet')
-        path_to_model = ''
+        path_to_model = '/media/DATA/Users/Federico/centernet_hg104_512x512_kpts_coco17_tpu-32'
         tf.keras.backend.clear_session()
-        model = tf.saved_model.load(os.path.join(config.model, 'saved_model'))
-        extract_keypoints_centernet(path_to_model)
-        raise NotImplementedError
+        print('siamo qui')
+        path_to_model = tf.saved_model.load(os.path.join(path_to_model, 'saved_model'))
+        print('start centernet')
+        extract_keypoints_centernet(path_to_model, zed)
     elif str(config.model).lower() == 'openpose':
         print('openpose')
         raise NotImplementedError

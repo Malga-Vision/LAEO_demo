@@ -1,23 +1,3 @@
-########################################################################
-#
-# Copyright (c) 2021, STEREOLABS.
-#
-# All rights reserved.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-########################################################################
-
 """
    This sample shows how to detect a human bodies and draw their
    modelised skeleton in an OpenGL window
@@ -32,7 +12,8 @@ import pyzed.sl as sl
 import tensorflow as tf
 import ogl_viewer.viewer as gl
 import cv_viewer.tracking_viewer as cv_viewer
-from source.utils.hpe import head_pose_estimation
+from source.laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
+from source.utils.hpe import head_pose_estimation, hpe
 from source.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
     draw_axis, draw_axis_3d
 from source.utils.my_utils import retrieve_xyz_from_detection, compute_distance, save_key_points_to_json
@@ -217,7 +198,8 @@ def extract_keypoints_centernet(model, zed):
         img = np.array(image.get_data()[:, :, :3])
 
         img_resized, new_old_shape = resize_preserving_ar(img, input_shape_od_model)
-        detections, elapsed_time = detect(model, img_resized, min_score_thresh, new_old_shape)  # detection classes boxes scores
+        detections, elapsed_time = detect(model, img_resized, min_score_thresh,
+                                          new_old_shape)  # detection classes boxes scores
         # probably to draw on resized
         img_with_detections = draw_detections(img_resized, detections, max_boxes_to_draw, None, None, None)
         # cv2.imshow("aa", img_with_detections)
@@ -229,45 +211,37 @@ def extract_keypoints_centernet(model, zed):
         gaze_model = tf.keras.models.load_model('models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
         # center_xy, yaw, pitch, roll = head_pose_estimation(kpt, 'centernet', gaze_model=gaze_model)
 
+        # _________ extract hpe and print to img
+        people_list = []
+
         for j, kpt_person in enumerate(kpt):
-            # TODO here change order if openpose
-            face_kpt = retrieve_interest_points(kpt_person, detector='centernet')
+            yaw, pitch, roll, tdx, tdy = hpe(gaze_model, kpt_person, detector='centernet')
 
-            tdx = np.mean([face_kpt[k] for k in range(0, 15, 3) if face_kpt[k] != 0.0])
-            tdy = np.mean([face_kpt[k + 1] for k in range(0, 15, 3) if face_kpt[k + 1] != 0.0])
-            if math.isnan(tdx) or math.isnan(tdy):
-                tdx = -1
-                tdy = -1
+            img = draw_axis_3d(yaw[0].numpy()[0], pitch[0].numpy()[0], roll[0].numpy()[0], image=img, tdx=tdx, tdy=tdy,
+                               size=50)
+            people_list.append({'yaw': yaw,
+                                'pitch': pitch,
+                                'roll': roll,
+                                'center_xy': [tdx, tdy]})
 
-            # center_xy.append([tdx, tdy])
-            face_kpt_normalized = np.array(normalize_wrt_maximum_distance_point(face_kpt))
-            # print(type(face_kpt_normalized), face_kpt_normalized)
-
-            aux = tf.cast(np.expand_dims(face_kpt_normalized, 0), tf.float32)
-
-            yaw, pitch, roll = gaze_model(aux, training=False)
-
-            print('yaw = {}'.format(yaw))
-            print('yaw[0].numpy()[0] = {}'.format(yaw[0].numpy()[0]))
-            print(tdx)
-
-            img = draw_axis_3d(yaw[0].numpy()[0], pitch[0].numpy()[0], roll[0].numpy()[0], image=img, tdx=tdx, tdy=tdy, size=50)
-
-        # call LAEO
-
-        for i in range(len(det)):
-            # img = draw_key_points_pose(img, kpt[i])
-            try:
-                print(yaw)
-                print(np.shape(yaw))
-
-            except:
-                pass
-            # img = draw_axis(yaw[i], pitch[i], roll[i], image=img, tdx=center_xy[0], tdy=center_xy[1], size=50) #single person
+        # for i in range(len(det)):
+        # img = draw_key_points_pose(img, kpt[i])
+        # img = draw_axis(yaw[i], pitch[i], roll[i], image=img, tdx=center_xy[0], tdy=center_xy[1], size=50) #single person
 
         print(type(img))
         cv2.imshow('bb', img)
 
+        # call LAEO
+        clip_uncertainty = 0.5
+        binarize_uncertainty = False
+        interaction_matrix = LAEO_computation(people_list, clipping_value=clip_uncertainty, clip=binarize_uncertainty)
+        # coloured arrow print per person
+        #TODO coloured arrow print per person
+        try:
+            laeo_1, laeo_2 = (np.unravel_index(np.argmax(interaction_matrix, axis=None), interaction_matrix.shape))
+            # print something around face
+        except:
+            pass
         # the 'q' button is set as the
         # quitting button you may use any
         # desired button of your choice
