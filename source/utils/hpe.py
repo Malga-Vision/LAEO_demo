@@ -63,4 +63,24 @@ def hpe(gaze_model, kpt_person, detector):
 
     return yaw, pitch, roll, tdx, tdy
 
+def project_ypr_in2d(yaw, pitch, roll):
+    """ Project yaw pitch roll on image plane. Result is NOT normalised.
+
+    :param yaw:
+    :param pitch:
+    :param roll:
+    :return:
+    """
+    pitch = pitch * np.pi / 180
+    yaw = -(yaw * np.pi / 180)
+    roll = roll * np.pi / 180
+
+    x3 = (math.sin(yaw))
+    y3 = (-math.cos(yaw) * math.sin(pitch))
+
+    # normalize the components
+    length = np.sqrt(x3**2 + y3**2)
+
+    return [x3, y3]
+
 

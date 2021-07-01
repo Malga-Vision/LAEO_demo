@@ -13,9 +13,9 @@ import tensorflow as tf
 import ogl_viewer.viewer as gl
 import cv_viewer.tracking_viewer as cv_viewer
 from source.laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
-from source.utils.hpe import head_pose_estimation, hpe
+from source.utils.hpe import head_pose_estimation, hpe, project_ypr_in2d
 from source.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
-    draw_axis, draw_axis_3d
+    draw_axis, draw_axis_3d, visualize_vector
 from source.utils.my_utils import retrieve_xyz_from_detection, compute_distance, save_key_points_to_json
 from source.ai.detection import detect
 from source.utils.my_utils import normalize_wrt_maximum_distance_point, retrieve_interest_points
@@ -34,7 +34,7 @@ def initialize_zed_camera(input_file=None):
 
     # Create a InitParameters object and set configuration parameters
     init_params = sl.InitParameters()
-    init_params.depth_mode = sl.DEPTH_MODE.QUALITY  # depth mode (PERFORMANCE/QUALITY/ULTRA)
+    init_params.depth_mode = sl.DEPTH_MODE.NONE  # depth mode (NONE/PERFORMANCE/QUALITY/ULTRA)
     init_params.coordinate_units = sl.UNIT.METER  # depth measurements (METER/CENTIMETER/MILLIMETER/FOOT/INCH)
     init_params.camera_resolution = sl.RESOLUTION.HD720  # resolution (HD720/HD1080/HD2K)
     init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP
@@ -59,10 +59,10 @@ def initialize_zed_camera(input_file=None):
 
     # Create and set RuntimeParameters after opening the camera
     runtime_parameters = sl.RuntimeParameters()
-    runtime_parameters.sensing_mode = sl.SENSING_MODE.FILL  # sensing mode (STANDARD/FILL)
+    runtime_parameters.sensing_mode = sl.SENSING_MODE.STANDARD  # sensing mode (STANDARD/FILL)
     # Setting the depth confidence parameters
-    runtime_parameters.confidence_threshold = 100
-    runtime_parameters.textureness_confidence_threshold = 100
+    runtime_parameters.confidence_threshold = 100 # 100 -> no pixel is rejected
+    runtime_parameters.texture_confidence_threshold = 100
 
     # mirror_ref = sl.Transform()
     # mirror_ref.set_translation(sl.Translation(2.75, 4.0, 0))
@@ -191,7 +191,7 @@ def extract_keypoints_centernet(model, zed):
 
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
         # Retrieve left image
-        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.GPU, display_resolution)
         # Retrieve objects
         # zed.retrieve_objects(bodies, obj_runtime_param)
 
@@ -213,12 +213,14 @@ def extract_keypoints_centernet(model, zed):
 
         # _________ extract hpe and print to img
         people_list = []
+        vector_list = []
 
         for j, kpt_person in enumerate(kpt):
             yaw, pitch, roll, tdx, tdy = hpe(gaze_model, kpt_person, detector='centernet')
 
-            img = draw_axis_3d(yaw[0].numpy()[0], pitch[0].numpy()[0], roll[0].numpy()[0], image=img, tdx=tdx, tdy=tdy,
-                               size=50)
+            # img = draw_axis_3d(yaw[0].numpy()[0], pitch[0].numpy()[0], roll[0].numpy()[0], image=img, tdx=tdx, tdy=tdy,
+            #                    size=50)
+
             people_list.append({'yaw': yaw,
                                 'pitch': pitch,
                                 'roll': roll,
@@ -237,6 +239,11 @@ def extract_keypoints_centernet(model, zed):
         interaction_matrix = LAEO_computation(people_list, clipping_value=clip_uncertainty, clip=binarize_uncertainty)
         # coloured arrow print per person
         #TODO coloured arrow print per person
+        for index, person in enumerate(people_list):
+            green = round((max(interaction_matrix[index, :])) * 255)
+            colour = (0, green, 0)
+            vector = project_ypr_in2d(person['yaw'], person['pitch'], person['roll'])
+            img = visualize_vector(img, [person['tdx'], person['tdy']], vector, title="", color=colour)
         try:
             laeo_1, laeo_2 = (np.unravel_index(np.argmax(interaction_matrix, axis=None), interaction_matrix.shape))
             # print something around face
@@ -255,6 +262,7 @@ def extract_keypoints_centernet(model, zed):
         # img_with_violations = draw_detections(img, detections, max_boxes_to_draw, violate, couple_points)
 
     image.free(sl.MEM.CPU)
+    image.free(sl.MEM.GPU)
     cv2.destroyAllWindows()
 
     # Disable modules and close camera
