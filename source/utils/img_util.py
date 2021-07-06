@@ -3,7 +3,7 @@ import os
 import json
 import numpy as np
 from math import cos, sin, pi
-from source.utils.labels import coco_category_index, rgb_colors, color_pose, color_pose_normalized, pose_id_part, face_category_index, body_parts_openpose, body_parts, face_points, face_points_openpose
+from utils.labels import coco_category_index, rgb_colors, color_pose, color_pose_normalized, pose_id_part, face_category_index, body_parts_openpose, body_parts, face_points, face_points_openpose
 # from src.utils.my_utils import fit_plane_least_square  # , retrieve_line_from_two_points
 
 
@@ -406,6 +406,7 @@ def confusion_matrix(conf_matrix, target_names=None, title="", cmap=None):
     Returns:
         :gbr (numpy.ndarray): The image where the lines connecting the key points will be printed
     """
+    from laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
     import matplotlib.pyplot as plt
 
     if not conf_matrix:

@@ -3,7 +3,7 @@ import os
 import numpy as np
 import tensorflow as tf
 
-from source.utils.my_utils import normalize_wrt_maximum_distance_point, retrieve_interest_points
+from utils.my_utils import normalize_wrt_maximum_distance_point, retrieve_interest_points
 
 
 def head_pose_estimation(kpt, detector, gaze_model, id_list=None):

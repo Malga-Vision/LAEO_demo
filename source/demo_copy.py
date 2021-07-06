@@ -12,13 +12,15 @@ import pyzed.sl as sl
 import tensorflow as tf
 import ogl_viewer.viewer as gl
 import cv_viewer.tracking_viewer as cv_viewer
-from source.laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
-from source.utils.hpe import head_pose_estimation, hpe, project_ypr_in2d
-from source.utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
+from laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
+from utils.hpe import head_pose_estimation, hpe, project_ypr_in2d
+from utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
     draw_axis, draw_axis_3d, visualize_vector
-from source.utils.my_utils import retrieve_xyz_from_detection, compute_distance, save_key_points_to_json
-from source.ai.detection import detect
-from source.utils.my_utils import normalize_wrt_maximum_distance_point, retrieve_interest_points
+
+
+# from utils.my_utils import retrieve_xyz_from_detection, compute_distance, save_key_points_to_json
+from ai.detection import detect
+# from utils.my_utils import normalize_wrt_maximum_distance_point, retrieve_interest_points
 
 
 def initialize_zed_camera(input_file=None):
@@ -34,7 +36,7 @@ def initialize_zed_camera(input_file=None):
 
     # Create a InitParameters object and set configuration parameters
     init_params = sl.InitParameters()
-    init_params.depth_mode = sl.DEPTH_MODE.NONE  # depth mode (NONE/PERFORMANCE/QUALITY/ULTRA)
+    init_params.depth_mode = sl.DEPTH_MODE.PERFORMANCE  # depth mode (NONE/PERFORMANCE/QUALITY/ULTRA)
     init_params.coordinate_units = sl.UNIT.METER  # depth measurements (METER/CENTIMETER/MILLIMETER/FOOT/INCH)
     init_params.camera_resolution = sl.RESOLUTION.HD720  # resolution (HD720/HD1080/HD2K)
     init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP
@@ -84,6 +86,8 @@ def extract_keypoints_zedcam(zed):
 
     :param zed: (pyzed.sl.Camera): Camera object
     """
+    #TODO plot extracted points without opengl
+
     # Enable Positional tracking (mandatory for object detection)
     positional_tracking_parameters = sl.PositionalTrackingParameters()
     # If the camera is static, uncomment the following line to have better performances and boxes sticked to the ground.
@@ -111,6 +115,14 @@ def extract_keypoints_zedcam(zed):
     bodies = sl.Objects()
     image = sl.Mat()
 
+    ########################################à
+    # Create OpenGL viewer
+    viewer = gl.GLViewer()
+    viewer.init(camera_info.calibration_parameters.left_cam, obj_param.enable_tracking)
+    image_scale = [display_resolution.width / camera_info.camera_resolution.width
+        , display_resolution.height / camera_info.camera_resolution.height]
+    #############################################
+
     # Grab an image
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
         # Retrieve left image, image is unsigned char of 4 channels
@@ -119,10 +131,18 @@ def extract_keypoints_zedcam(zed):
         zed.retrieve_objects(bodies, obj_runtime_param)
 
         # here we have bodies, extract and print
+        ####################################################################
+        # Update GL view
+        viewer.update_view(image, bodies)
+        # Update OCV view
+        image_left_ocv = image.get_data()
+        cv_viewer.render_2D(image_left_ocv, image_scale, bodies.object_list, obj_param.enable_tracking)
+        cv2.imshow("ZED | 2D View", image_left_ocv)
+        #########################################################################à
 
-        img = np.array(image.get_data()[:, :, :3])
-
-        cv2.imshow("ZED | 2D View", img)
+        # img = np.array(image.get_data()[:, :, :3])
+        #
+        # cv2.imshow("ZED | 2D View", img)
 
         # the 'q' button is set as the
         # quitting button you may use any
@@ -188,10 +208,13 @@ def extract_keypoints_centernet(model, zed):
     camera_info = zed.get_camera_information()
     display_resolution = sl.Resolution(min(camera_info.camera_resolution.width, 1280),
                                        min(camera_info.camera_resolution.height, 720))
+    # call HPE
+    print('load hpe')
+    gaze_model = tf.keras.models.load_model('../models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
 
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
         # Retrieve left image
-        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.GPU, display_resolution)
+        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
         # Retrieve objects
         # zed.retrieve_objects(bodies, obj_runtime_param)
 
@@ -207,8 +230,7 @@ def extract_keypoints_centernet(model, zed):
         det, kpt = percentage_to_pixel(img.shape, detections['detection_boxes'], detections['detection_scores'],
                                        detections['detection_keypoints'], detections['detection_keypoint_scores'])
 
-        # call HPE
-        gaze_model = tf.keras.models.load_model('models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
+
         # center_xy, yaw, pitch, roll = head_pose_estimation(kpt, 'centernet', gaze_model=gaze_model)
 
         # _________ extract hpe and print to img
@@ -221,17 +243,17 @@ def extract_keypoints_centernet(model, zed):
             # img = draw_axis_3d(yaw[0].numpy()[0], pitch[0].numpy()[0], roll[0].numpy()[0], image=img, tdx=tdx, tdy=tdy,
             #                    size=50)
 
-            people_list.append({'yaw': yaw,
-                                'pitch': pitch,
-                                'roll': roll,
+            people_list.append({'yaw': yaw[0].numpy()[0],
+                                'yaw_u': 0,
+                                'pitch': pitch[0].numpy()[0],
+                                'pitch_u': 0,
+                                'roll': roll[0].numpy()[0],
+                                'roll_u': 0,
                                 'center_xy': [tdx, tdy]})
 
-        # for i in range(len(det)):
-        # img = draw_key_points_pose(img, kpt[i])
+        for i in range(len(det)):
+            img = draw_key_points_pose(img, kpt[i])
         # img = draw_axis(yaw[i], pitch[i], roll[i], image=img, tdx=center_xy[0], tdy=center_xy[1], size=50) #single person
-
-        print(type(img))
-        cv2.imshow('bb', img)
 
         # call LAEO
         clip_uncertainty = 0.5
@@ -243,7 +265,8 @@ def extract_keypoints_centernet(model, zed):
             green = round((max(interaction_matrix[index, :])) * 255)
             colour = (0, green, 0)
             vector = project_ypr_in2d(person['yaw'], person['pitch'], person['roll'])
-            img = visualize_vector(img, [person['tdx'], person['tdy']], vector, title="", color=colour)
+            img = visualize_vector(img, person['center_xy'], vector, title="", color=colour)
+        cv2.imshow('bb', img)
         try:
             laeo_1, laeo_2 = (np.unravel_index(np.argmax(interaction_matrix, axis=None), interaction_matrix.shape))
             # print something around face
@@ -262,7 +285,7 @@ def extract_keypoints_centernet(model, zed):
         # img_with_violations = draw_detections(img, detections, max_boxes_to_draw, violate, couple_points)
 
     image.free(sl.MEM.CPU)
-    image.free(sl.MEM.GPU)
+    # image.free(sl.MEM.GPU)
     cv2.destroyAllWindows()
 
     # Disable modules and close camera
@@ -287,10 +310,17 @@ if __name__ == "__main__":
         extract_keypoints_zedcam(zed=zed)  # everything performed with stereolabs SDK
     elif str(config.model).lower() == 'centernet':
         print('centernet')
-        path_to_model = '/media/DATA/Users/Federico/centernet_hg104_512x512_kpts_coco17_tpu-32'
+        # path_to_model = '/media/DATA/Users/Federico/centernet_hg104_512x512_kpts_coco17_tpu-32'
+        path_to_model = '/media/memory/centernet_hg104_512x512_kpts_coco17_tpu-32'
+        if not os.path.isdir(path_to_model):
+            path_to_model = '/media/DATA/Users/Federico/centernet_hg104_512x512_kpts_coco17_tpu-32'
+            if not os.path.isdir(path_to_model):
+                raise IOError
+
         tf.keras.backend.clear_session()
         print('siamo qui')
         path_to_model = tf.saved_model.load(os.path.join(path_to_model, 'saved_model'))
+        # path_to_model = tf.compat.v1.saved_model.load(os.path.join(path_to_model, 'saved_model'))
         print('start centernet')
         extract_keypoints_centernet(path_to_model, zed)
     elif str(config.model).lower() == 'openpose':

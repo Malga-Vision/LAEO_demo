@@ -1,5 +1,5 @@
-from source.utils.my_utils import rescale_bb, rescale_key_points, delete_items_from_array_aux, enlarge_bb
-from source.utils.labels import coco_category_index, face_category_index
+from utils.my_utils import rescale_bb, rescale_key_points, delete_items_from_array_aux, enlarge_bb
+from utils.labels import coco_category_index, face_category_index
 import time
 import numpy as np
 

@@ -1,15 +1,45 @@
 '''It calculates interaction frame per frame with not temporal consistency'''
-import json
-import jsonpickle
-import numpy as np
-
-from src.load_dataset_files.utils_load_predictions import load_head_3d_file
-from pathlib import Path
-from src.threeD_src.interaction_3d import Interaction_3d, project_ypr_in2d
-from src.load_dataset_files.utils_load_predictions import bbox_creator
-
 import re
 
+import numpy as np
+
+from laeo_per_frame.interaction_per_frame_uncertainty import project_ypr_in2d
+
+def _compute_interaction_cosine(head_position, gaze_direction, target, visual_cone=True):
+    """Computes the interaction between two people using the angle of view.
+
+    The interaction in measured as the cosine of the angle formed by the line from person A to B
+    and the gaze direction of person A.
+    Reference system of zero degree:
+
+
+    :param head_position: position of the head of person A
+    :param gaze_direction: gaze direction of the head of person A
+    :param target: position of head of person B
+    :param yaw:
+    :param pitch:
+    :param roll:
+    :param visual_cone: (default) True, if False gaze is a line, otherwise it is a cone (more like humans)
+    :return: float or double describing the quantity of interaction
+    """
+    if np.array_equal(head_position, target):
+        return 0  # or -1
+    else:
+        # direction from observer to target
+        _direction_ = np.arctan2((target[1] - head_position[1]), (target[0] - head_position[0]))
+        _direction_gaze_ = np.arctan2(gaze_direction[1], gaze_direction[0])
+        difference = _direction_ - _direction_gaze_  # radians
+        # TODO implemnt visual_cone as inverse of the 'uncertanty' parameter
+        # TODO implement difference with and without visual_cone
+        if visual_cone and (0 < difference < np.deg2rad(5)):
+            difference = 0
+        # difference of the line joining observer -> target with the gazing direction,
+
+        val = np.cos(difference)
+        if val < 0:
+            return 0
+        else:
+            return val
 
 def calculate_uncertainty(yaw_1, pitch_1, roll_1, clipping_value, clip=True):
     # res_1 = abs((pitch_1 + yaw_1 + roll_1) / 3)
@@ -66,7 +96,7 @@ def LAEO_computation(people_list, clipping_value, clip):
                                    people_list[subject]['roll'])
         norm_xy_all.append(norm_xy)
         for object in range(people_in_frame):
-            v = Interaction_3d._compute_interaction_cosine(people_list[subject]['center_xy'], norm_xy,
+            v = _compute_interaction_cosine(people_list[subject]['center_xy'], norm_xy,
                                                            people_list[object]['center_xy'])
             matrix[subject][object] = v
 
@@ -95,11 +125,14 @@ def LAEO_computation(people_list, clipping_value, clip):
 
 
 if __name__ == '__main__':
-    clip_uncertainty = 0
+    clip_uncertainty = 0.1
     binarize_uncertainty = True
     yaw, pitch, roll, tdx, tdy = 0, 0, 0, 0, 0
     my_list = [{'yaw': yaw,
+                'yaw_u': 0,
                 'pitch': pitch,
+                'pitch_u': 0,
                 'roll': roll,
+                'roll_u': 0,
                 'center_xy': [tdx, tdy]}]
     _ = LAEO_computation(my_list, clipping_value=clip_uncertainty, clip=binarize_uncertainty)
