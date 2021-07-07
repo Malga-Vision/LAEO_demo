@@ -1,7 +1,7 @@
 import numpy as np
 from filterpy.kalman import KalmanFilter
 import matplotlib
-from src.utils.my_utils import linear_assignment, iou_batch, convert_bbox_to_z, convert_x_to_bbox, associate_detections_to_trackers
+from utils.my_utils import linear_assignment, iou_batch, convert_bbox_to_z, convert_x_to_bbox, associate_detections_to_trackers
 matplotlib.use('TkAgg')
 
 # np.random.seed(0)

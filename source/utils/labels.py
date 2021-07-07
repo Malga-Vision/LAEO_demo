@@ -184,12 +184,12 @@ color_pose = {
 }
 
 color_pose_normalized = {
-    "purple": (100/255., 0/255., 255/255.),
-    "light_pink": (255/255., 0/255., 80/255.),
-    "dark_pink": (255/255., 0/255., 220/255.),
-    "light_orange": (255/255., 80/255., 0/255.),
-    "dark_orange": (255/255., 220/255., 0/255.),
-    "blue": (0/255., 0/255., 255/255.)
+    "purple": (100 / 255., 0 / 255., 255 / 255.),
+    "light_pink": (255 / 255., 0 / 255., 80 / 255.),
+    "dark_pink": (255 / 255., 0 / 255., 220 / 255.),
+    "light_orange": (255 / 255., 80 / 255., 0 / 255.),
+    "dark_orange": (255 / 255., 220 / 255., 0 / 255.),
+    "blue": (0 / 255., 0 / 255., 255 / 255.)
 }
 
 pose_id_part = {
@@ -214,18 +214,17 @@ pose_id_part = {
 
 rev_pose_id_part = {value: key for key, value in pose_id_part.items()}
 
-
 pose_id_part_openpose = {
-    0:  "Nose",
-    1:  "Neck",
-    2:  "RShoulder",
-    3:  "RElbow",
-    4:  "RWrist",
-    5:  "LShoulder",
-    6:  "LElbow",
-    7:  "LWrist",
-    8:  "MidHip",
-    9:  "RHip",
+    0: "Nose",
+    1: "Neck",
+    2: "RShoulder",
+    3: "RElbow",
+    4: "RWrist",
+    5: "LShoulder",
+    6: "LElbow",
+    7: "LWrist",
+    8: "MidHip",
+    9: "RHip",
     10: "RKnee",
     11: "RAnkle",
     12: "LHip",
@@ -244,8 +243,28 @@ pose_id_part_openpose = {
     25: "Background"
 }
 
-rev_pose_id_part_openpose = {value: key for key, value in pose_id_part_openpose.items()}
+pose_id_part_zedcam = {
+    0: "Nose",
+    1: "Neck",
+    2: "RShoulder",
+    3: "RElbow",
+    4: "RWrist",
+    5: "LShoulder",
+    6: "LElbow",
+    7: "LWrist",
+    8: "RHip",
+    9: "RKnee",
+    10: "RAnkle",
+    11: "LHip",
+    12: "LKnee",
+    13: "LAnkle",
+    14: "REye",
+    15: "LEye",
+    16: "REar",
+    17: "LEar",
+}
 
+rev_pose_id_part_openpose = {value: key for key, value in pose_id_part_openpose.items()}
 
 face_category_index = {
     1: {'id': 1, 'name': 'Face'},
@@ -269,10 +288,17 @@ tracking_colors = {
     14: (0, 128, 128),
 }
 
-body_parts = [(5, 6), (5, 7), (6, 8), (7, 9), (8, 10), (11, 12), (5, 11), (6, 12), (11, 13), (12, 14), (13, 15), (14, 16)]
+body_parts = [(5, 6), (5, 7), (6, 8), (7, 9), (8, 10), (11, 12), (5, 11), (6, 12), (11, 13), (12, 14), (13, 15),
+              (14, 16)]
 
-body_parts_openpose = [(5, 2), (5, 6), (2, 3), (6, 7), (3, 4), (12, 9), (5, 12), (2, 9), (12, 13), (9, 10), (13, 14), (10, 11)]
+body_parts_openpose = [(5, 2), (5, 6), (2, 3), (6, 7), (3, 4), (12, 9), (5, 12), (2, 9), (12, 13), (9, 10), (13, 14),
+                       (10, 11)]
+
+body_parts_zedcam = [(5, 2), (5, 6), (2, 3), (6, 7), (3, 4), (11, 8), (5, 11), (2, 8), (11, 12), (8, 9), (12, 13),
+                       (9, 10)]
 
 face_points = [0, 1, 2, 3, 4]
 
 face_points_openpose = [0, 16, 15, 18, 17]
+
+face_points_zedcam = [0, 14, 15, 16, 17]

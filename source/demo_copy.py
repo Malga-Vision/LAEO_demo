@@ -1,6 +1,6 @@
 """
    This sample shows how to detect a human bodies and draw their
-   modelised skeleton in an OpenGL window
+   modelised skeleton in an window
 """
 import argparse
 import math
@@ -10,12 +10,10 @@ import cv2
 import numpy as np
 import pyzed.sl as sl
 import tensorflow as tf
-import ogl_viewer.viewer as gl
-import cv_viewer.tracking_viewer as cv_viewer
 from laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
 from utils.hpe import head_pose_estimation, hpe, project_ypr_in2d
 from utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
-    draw_axis, draw_axis_3d, visualize_vector
+    draw_axis, draw_axis_3d, visualize_vector, draw_key_points_pose_zedcam
 from ai.tracker import Sort
 
 
@@ -87,7 +85,6 @@ def extract_keypoints_zedcam(zed):
 
     :param zed: (pyzed.sl.Camera): Camera object
     """
-    #TODO plot extracted points without opengl
 
     # Enable Positional tracking (mandatory for object detection)
     positional_tracking_parameters = sl.PositionalTrackingParameters()
@@ -98,7 +95,7 @@ def extract_keypoints_zedcam(zed):
     obj_param = sl.ObjectDetectionParameters()
     obj_param.enable_body_fitting = True  # Smooth skeleton move
     obj_param.enable_tracking = True  # Track people across images flow
-    obj_param.detection_model = sl.DETECTION_MODEL.HUMAN_BODY_FAST  # HUMAN_BODY_MEDIUM ->less fast but more accurate
+    obj_param.detection_model = sl.DETECTION_MODEL.HUMAN_BODY_MEDIUM  # HUMAN_BODY_FAST, HUMAN_BODY_MEDIUM ->less fast but more accurate
 
     # Enable Object Detection module
     zed.enable_object_detection(obj_param)
@@ -116,34 +113,68 @@ def extract_keypoints_zedcam(zed):
     bodies = sl.Objects()
     image = sl.Mat()
 
-    ########################################à
-    # Create OpenGL viewer
-    viewer = gl.GLViewer()
-    viewer.init(camera_info.calibration_parameters.left_cam, obj_param.enable_tracking)
-    image_scale = [display_resolution.width / camera_info.camera_resolution.width
-        , display_resolution.height / camera_info.camera_resolution.height]
-    #############################################
+    gaze_model = tf.keras.models.load_model('../models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
 
     # Grab an image
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
         # Retrieve left image, image is unsigned char of 4 channels
+        # if len(tf.config.list_physical_devices('GPU'))>0:
+        #     zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.GPU, display_resolution)
+        # else:
         zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
         # Retrieve objects
         zed.retrieve_objects(bodies, obj_runtime_param)
 
-        # here we have bodies, extract and print
-        ####################################################################
-        # Update GL view
-        viewer.update_view(image, bodies)
-        # Update OCV view
         image_left_ocv = image.get_data()
-        cv_viewer.render_2D(image_left_ocv, image_scale, bodies.object_list, obj_param.enable_tracking)
-        cv2.imshow("ZED | 2D View", image_left_ocv)
-        #########################################################################à
 
-        print('obj.list {}'.format(bodies.object_list))
-        for obj in bodies:
-            print('try'.format(obj.keypoint_2d[sl.BODY_PARTS.LEFT_HIP.value]) )
+        people_list =[]
+        kpt = 0
+        # for j, obj_person in enumerate(bodies.object_list):
+        #     kpt = np.asarray(obj_person.keypoint_2d)
+        for j, obj_person in enumerate(bodies.object_list):
+            # kpt = np.asarray(obj_person.keypoint_2d)
+            confidence = np.asarray(obj_person.keypoint_confidence)
+            # replace nana with 0 (zero)
+            where_are_NaNs = np.isnan(confidence)
+            confidence[where_are_NaNs] = 0
+            kpt = np.c_[obj_person.keypoint_2d, confidence/99] # 99 is the max
+
+            yaw, pitch, roll, tdx, tdy = hpe(gaze_model, kpt, detector='zedcam')
+
+            # img = draw_axis_3d(yaw[0].numpy()[0], pitch[0].numpy()[0], roll[0].numpy()[0], image=img, tdx=tdx, tdy=tdy,
+            #                    size=50)
+
+            people_list.append({'yaw': yaw[0].numpy()[0],
+                                'yaw_u': 0,
+                                'pitch': pitch[0].numpy()[0],
+                                'pitch_u': 0,
+                                'roll': roll[0].numpy()[0],
+                                'roll_u': 0,
+                                'center_xy': [tdx, tdy]})
+
+
+        for obj_person in bodies.object_list:
+            image_left_ocv = draw_key_points_pose_zedcam(image_left_ocv, obj_person.keypoint_2d)
+
+        # cv2.imshow("ZED | 2D View", image_left_ocv)
+
+        # call LAEO
+        clip_uncertainty = 0.5
+        binarize_uncertainty = False
+        interaction_matrix = LAEO_computation(people_list, clipping_value=clip_uncertainty, clip=binarize_uncertainty)
+        # coloured arrow print per person
+        #TODO coloured arrow print per person
+        for index, person in enumerate(people_list):
+            green = round((max(interaction_matrix[index, :])) * 255)
+            colour = (0, green, 0)
+            vector = project_ypr_in2d(person['yaw'], person['pitch'], person['roll'])
+            image_left_ocv = visualize_vector(image_left_ocv, person['center_xy'], vector, title="", color=colour)
+        cv2.imshow('bb', image_left_ocv)
+        try:
+            laeo_1, laeo_2 = (np.unravel_index(np.argmax(interaction_matrix, axis=None), interaction_matrix.shape))
+            # print something around face
+        except:
+            pass
 
         # img = np.array(image.get_data()[:, :, :3])
         #
@@ -181,29 +212,6 @@ def myfunct():
     pass
 
 
-# https://www.stereolabs.com/docs/api/python/classpyzed_1_1sl_1_1BODY__PARTS.html
-# NOSE
-# NECK
-# RIGHT_SHOULDER
-# RIGHT_ELBOW
-# RIGHT_WRIST
-# LEFT_SHOULDER
-# LEFT_ELBOW
-# LEFT_WRIST
-# RIGHT_HIP
-# RIGHT_KNEE
-# RIGHT_ANKLE
-# LEFT_HIP
-# LEFT_KNEE
-# LEFT_ANKLE
-# RIGHT_EYE
-# LEFT_EYE
-# RIGHT_EAR
-# LEFT_EAR
-# e.g. sl.BODY_PARTS.LEFT_HIP.value
-# obj.keypoint_2d[sl.BODY_PARTS.LEFT_HIP.value]
-
-
 def extract_keypoints_centernet(model, zed):
     input_shape_od_model = (512, 512)
 
@@ -224,10 +232,10 @@ def extract_keypoints_centernet(model, zed):
 
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
         # Retrieve left image
-        if tf.test.is_gpu_available():
-            zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.GPU, display_resolution)
-        else:
-            zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+        # if tf.test.is_gpu_available():
+        #     zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.GPU, display_resolution)
+        # else:
+        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
         # Retrieve objects
         # zed.retrieve_objects(bodies, obj_runtime_param)
 

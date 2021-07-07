@@ -3,7 +3,7 @@ import os
 import json
 import numpy as np
 from math import cos, sin, pi
-from utils.labels import coco_category_index, rgb_colors, color_pose, color_pose_normalized, pose_id_part, face_category_index, body_parts_openpose, body_parts, face_points, face_points_openpose
+from utils.labels import coco_category_index, rgb_colors, color_pose, color_pose_normalized, pose_id_part, face_category_index, body_parts_openpose, body_parts, face_points, face_points_openpose, pose_id_part_zedcam, face_points_zedcam, body_parts_zedcam
 # from src.utils.my_utils import fit_plane_least_square  # , retrieve_line_from_two_points
 
 
@@ -328,7 +328,7 @@ def draw_key_points_pose(image, kpt, openpose=False):
 
     return image
 
-def draw_key_points_pose_zedcam(image, kpt, openpose=False):
+def draw_key_points_pose_zedcam(image, kpt, openpose=True):
     """
     Draw the key points and the lines connecting them; it expects the output of CenterNet (not OpenPose format)
 
@@ -341,13 +341,13 @@ def draw_key_points_pose_zedcam(image, kpt, openpose=False):
         :img (numpy.ndarray): The image with the drawings of lines and key points
     """
 
-    parts = body_parts_openpose if openpose else body_parts
+    parts = body_parts_zedcam
     kpt_score = None
     threshold = 0.4
 
     overlay = image.copy()
 
-    face_pts = face_points_openpose if openpose else face_points
+    face_pts = face_points_zedcam
 
     for j in range(len(kpt)):
         # 0 nose, 1/2 left/right eye, 3/4 left/right ear

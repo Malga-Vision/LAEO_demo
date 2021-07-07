@@ -1311,6 +1311,12 @@ def retrieve_interest_points(kpts, detector):
             res_kpts.append(kpts[index][1])
             res_kpts.append(kpts[index][0])
             res_kpts.append(kpts[index][2])
+    elif detector== 'zedcam':
+        face_points = [0, 14, 15, 16, 17]
+        for index in face_points:
+            res_kpts.append(kpts[index][0])
+            res_kpts.append(kpts[index][1])
+            res_kpts.append(kpts[index][2])
     else:
         # take only interest points (5 points of face)
         face_points = [0, 16, 15, 18, 17]
