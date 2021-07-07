@@ -328,6 +328,60 @@ def draw_key_points_pose(image, kpt, openpose=False):
 
     return image
 
+def draw_key_points_pose_zedcam(image, kpt, openpose=False):
+    """
+    Draw the key points and the lines connecting them; it expects the output of CenterNet (not OpenPose format)
+
+    Args:
+        :image (numpy.ndarray): The image where the lines connecting the key points will be printed
+        :kpt (list): list of lists of points detected for each person [[x1, y1, c1], [x2, y2, c2],...] where x and y represent the coordinates of each
+            point while c represents the confidence
+
+    Returns:
+        :img (numpy.ndarray): The image with the drawings of lines and key points
+    """
+
+    parts = body_parts_openpose if openpose else body_parts
+    kpt_score = None
+    threshold = 0.4
+
+    overlay = image.copy()
+
+    face_pts = face_points_openpose if openpose else face_points
+
+    for j in range(len(kpt)):
+        # 0 nose, 1/2 left/right eye, 3/4 left/right ear
+        color = color_pose["blue"]
+        if j == face_pts[0]:  # naso
+            color = color_pose["purple"]
+        if j == face_pts[1]:
+            color = color_pose["light_pink"]
+        if j == face_pts[2]:
+            color = color_pose["dark_pink"]
+        if j == face_pts[3]:
+            color = color_pose["light_orange"]
+        if j == face_pts[4]:
+            color = color_pose["dark_orange"]
+        if openpose:
+            cv2.circle(image, (int(kpt[j][0]), int(kpt[j][1])), 1, color, 2)
+        else:
+            cv2.circle(image, (int(kpt[j][1]), int(kpt[j][0])), 1, color, 2)
+        # cv2.putText(img, pose_id_part[i], (int(kpts[j][i, 1] * img.shape[1]), int(kpts[j][i, 0] * img.shape[0])), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1, cv2.LINE_AA)
+
+    for part in parts:
+        if int(kpt[part[0]][1]) != 0 and int(kpt[part[0]][0]) != 0 and int(kpt[part[1]][1]) != 0 and int(
+                kpt[part[1]][0]) != 0:
+
+            if openpose:
+                cv2.line(overlay, (int(kpt[part[0]][0]), int(kpt[part[0]][1])), (int(kpt[part[1]][0]), int(kpt[part[1]][1])), (255, 255, 255), 2)
+            else:
+                cv2.line(overlay, (int(kpt[part[0]][1]), int(kpt[part[0]][0])),
+                         (int(kpt[part[1]][1]), int(kpt[part[1]][0])), (255, 255, 255), 2)
+
+    alpha = 0.4
+    image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
+
+    return image
 
 def plot_3d_points(list_points):
     """

@@ -16,6 +16,7 @@ from laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
 from utils.hpe import head_pose_estimation, hpe, project_ypr_in2d
 from utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
     draw_axis, draw_axis_3d, visualize_vector
+from ai.tracker import Sort
 
 
 # from utils.my_utils import retrieve_xyz_from_detection, compute_distance, save_key_points_to_json
@@ -140,6 +141,10 @@ def extract_keypoints_zedcam(zed):
         cv2.imshow("ZED | 2D View", image_left_ocv)
         #########################################################################à
 
+        print('obj.list {}'.format(bodies.object_list))
+        for obj in bodies:
+            print('try'.format(obj.keypoint_2d[sl.BODY_PARTS.LEFT_HIP.value]) )
+
         # img = np.array(image.get_data()[:, :, :3])
         #
         # cv2.imshow("ZED | 2D View", img)
@@ -195,6 +200,8 @@ def myfunct():
 # LEFT_EYE
 # RIGHT_EAR
 # LEFT_EAR
+# e.g. sl.BODY_PARTS.LEFT_HIP.value
+# obj.keypoint_2d[sl.BODY_PARTS.LEFT_HIP.value]
 
 
 def extract_keypoints_centernet(model, zed):
@@ -212,9 +219,15 @@ def extract_keypoints_centernet(model, zed):
     print('load hpe')
     gaze_model = tf.keras.models.load_model('../models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
 
+    # tracker stuff
+    mot_tracker = Sort(max_age=20, min_hits=1, iou_threshold=0.4)
+
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
         # Retrieve left image
-        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+        if tf.test.is_gpu_available():
+            zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.GPU, display_resolution)
+        else:
+            zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
         # Retrieve objects
         # zed.retrieve_objects(bodies, obj_runtime_param)
 
@@ -230,6 +243,9 @@ def extract_keypoints_centernet(model, zed):
         det, kpt = percentage_to_pixel(img.shape, detections['detection_boxes'], detections['detection_scores'],
                                        detections['detection_keypoints'], detections['detection_keypoint_scores'])
 
+        # tracker stuff
+        trackers = mot_tracker.update(det, kpt)
+        people = mot_tracker.get_trackers()
 
         # center_xy, yaw, pitch, roll = head_pose_estimation(kpt, 'centernet', gaze_model=gaze_model)
 
