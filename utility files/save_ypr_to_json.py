@@ -17,7 +17,7 @@ if __name__ == "__main__":
     fps, shape = 20, (1280, 720)
     # writer, _ = initialize_video_recorder(os.path.join(config.output, 'MR12.mp4.avi'), None, fps, shape)
 
-    gaze_model = tf.keras.models.load_model('models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
+    gaze_model = tf.keras.models.load_model('../models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
 
     path_folder = '/media/federico/HHD FEDE/ucolaeo-processed/v1.1/open_pose/untracked'
     img_folder = '/media/federico/HHD FEDE/ucolaeo-processed/v1.1/open_pose/tracked'

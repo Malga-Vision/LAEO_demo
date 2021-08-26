@@ -5,22 +5,22 @@
    The line is coloured: GREEN -> high ocular interaction, BLACk -> low interaction
 """
 import argparse
-import math
 import os
 
 import cv2
 import numpy as np
 import pyzed.sl as sl
 import tensorflow as tf
-from laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
-from utils.hpe import head_pose_estimation, hpe, project_ypr_in2d
-from utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
-    draw_axis, draw_axis_3d, visualize_vector, draw_key_points_pose_zedcam
-from ai.tracker import Sort
 
+
+from ai.detection import detect
+from ai.tracker import Sort
+from laeo_per_frame.interaction_per_frame_uncertainty import LAEO_computation
+from utils.hpe import hpe, project_ypr_in2d
+from utils.img_util import resize_preserving_ar, draw_detections, percentage_to_pixel, draw_key_points_pose, \
+    visualize_vector, draw_key_points_pose_zedcam
 
 # from utils.my_utils import retrieve_xyz_from_detection, compute_distance, save_key_points_to_json
-from ai.detection import detect
 # from utils.my_utils import normalize_wrt_maximum_distance_point, retrieve_interest_points
 
 
