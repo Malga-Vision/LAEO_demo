@@ -1,6 +1,8 @@
 """
    This sample shows how to detect a human bodies and draw their
    modelised skeleton in an window
+   Calculate the direction of view form face keypoints and draw the view line.
+   The line is coloured: GREEN -> high ocular interaction, BLACk -> low interaction
 """
 import argparse
 import math
@@ -213,6 +215,11 @@ def myfunct():
 
 
 def extract_keypoints_centernet(model, zed):
+    """
+
+    :param model:
+    :param zed:
+    """
     input_shape_od_model = (512, 512)
 
     image, depth_image, point_cloud = sl.Mat(), sl.Mat(), sl.Mat()
@@ -317,32 +324,44 @@ def extract_keypoints_centernet(model, zed):
 
 
 if __name__ == "__main__":
+    """Example of usage:
+            -m zed
+            [-f /media/DATA/Users/Federico/Zed_Images/HD720_SN24782978_14-06-59.svo]
+        or 
+            -m centernet
+            [-f /your_file]
+        m: identifies the keypoints extractor algorithm
+        f: a pre-recorded zedcam file, .svo format"""
 
     ap = argparse.ArgumentParser()
     ap.add_argument("-m", "--model", type=str, default=None, help="path to the model", required=True)
     ap.add_argument("-f", "--input-file", type=str, default=None, help="input a SVO file", required=False)
     config = ap.parse_args()
 
+    # choose between real time and pre-recorded file
     if config.input_file is not None:
         print('video file {}'.format(config.input_file))
     else:
         print('real time camera acquisition')
+
+    # initialize zedcam with the proper function
     zed, run_parameters = initialize_zed_camera(input_file=config.input_file)
 
+    # choose the keypoints extractor algorithm and run it on every frame, here the program remains until finished
     if str(config.model).lower() == 'zed':
         print('start zedcam keypoint extractor')
         extract_keypoints_zedcam(zed=zed)  # everything performed with stereolabs SDK
     elif str(config.model).lower() == 'centernet':
-        print('centernet')
+        print('start centernet keypoint extractor')
         # path_to_model = '/media/DATA/Users/Federico/centernet_hg104_512x512_kpts_coco17_tpu-32'
+        # path to your centernet model: https://tfhub.dev/tensorflow/centernet/resnet50v2_512x512/1
         path_to_model = '/media/memory/centernet_hg104_512x512_kpts_coco17_tpu-32'
         if not os.path.isdir(path_to_model):
             path_to_model = '/media/DATA/Users/Federico/centernet_hg104_512x512_kpts_coco17_tpu-32'
             if not os.path.isdir(path_to_model):
-                raise IOError
+                raise IOError('path for model is incorrect, cannot find centernet model')
 
         tf.keras.backend.clear_session()
-        print('siamo qui')
         path_to_model = tf.saved_model.load(os.path.join(path_to_model, 'saved_model'))
         # path_to_model = tf.compat.v1.saved_model.load(os.path.join(path_to_model, 'saved_model'))
         print('start centernet')
@@ -352,4 +371,4 @@ if __name__ == "__main__":
         raise NotImplementedError
     else:
         print('wrong input for model value')
-        raise IOError  # probably not correct error
+        raise IOError('wrong model name. Try with \'zed\' or \'centernet\' ') # probably not correct error
