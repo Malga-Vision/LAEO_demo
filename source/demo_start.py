@@ -114,8 +114,8 @@ def extract_keypoints_zedcam(zed):
     # Create ZED objects filled in the main loop
     bodies = sl.Objects()
     image = sl.Mat()
-
-    gaze_model = tf.keras.models.load_model('../models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
+#../models/hpe_model/bhp-net_model
+    gaze_model = tf.keras.models.load_model('../models', custom_objects={"tf": tf})
 
     # Grab an image
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
@@ -127,7 +127,10 @@ def extract_keypoints_zedcam(zed):
         # Retrieve objects
         zed.retrieve_objects(bodies, obj_runtime_param)
 
-        image_left_ocv = image.get_data()
+        # image_left_ocv = image.get_data()
+        image_left_ocv = np.array(image.get_data()[:, :, :3])
+        image_left_ocv = cv2.cvtColor(image_left_ocv, cv2.COLOR_BGR2GRAY)
+        image_left_ocv = cv2.cvtColor(image_left_ocv, cv2.COLOR_GRAY2RGB)
 
         people_list =[]
         kpt = 0
@@ -169,9 +172,13 @@ def extract_keypoints_zedcam(zed):
         for index, person in enumerate(people_list):
             green = round((max(interaction_matrix[index, :])) * 255)
             colour = (0, green, 0)
+            if green < 40:
+                colour =(0,0,255)
             vector = project_ypr_in2d(person['yaw'], person['pitch'], person['roll'])
             image_left_ocv = visualize_vector(image_left_ocv, person['center_xy'], vector, title="", color=colour)
-        cv2.imshow('bb', image_left_ocv)
+        cv2.namedWindow('MaLGa Lab Demo', cv2.WINDOW_NORMAL)
+        cv2.imshow('MaLGa Lab Demo', image_left_ocv)
+        # cv2.resizeWindow('MaLGa Lab Demo', 400, 400)
         try:
             laeo_1, laeo_2 = (np.unravel_index(np.argmax(interaction_matrix, axis=None), interaction_matrix.shape))
             # print something around face
@@ -214,15 +221,19 @@ def myfunct():
     pass
 
 
-def extract_keypoints_centernet(model, zed):
+def extract_keypoints_centernet(path_to_model, zed, gaze_model_path):
     """
 
     :param model:
     :param zed:
     """
+
+    model = tf.saved_model.load(os.path.join(path_to_model, 'saved_model'))
+    # model = tf.keras.models.load_model(gaze_model_path, custom_objects={"tf": tf})
+
     input_shape_od_model = (512, 512)
 
-    image, depth_image, point_cloud = sl.Mat(), sl.Mat(), sl.Mat()
+    image, image_cpu, depth_image, point_cloud = sl.Mat(), sl.Mat(), sl.Mat(), sl.Mat()
 
     # params
     min_score_thresh, max_boxes_to_draw, min_distance = .45, 50, 1.5
@@ -232,23 +243,28 @@ def extract_keypoints_centernet(model, zed):
                                        min(camera_info.camera_resolution.height, 720))
     # call HPE
     print('load hpe')
-    gaze_model = tf.keras.models.load_model('../models/hpe_model/bhp-net_model', custom_objects={"tf": tf})
+    gaze_model = tf.keras.models.load_model(gaze_model_path, custom_objects={"tf": tf})
 
     # tracker stuff
     mot_tracker = Sort(max_age=20, min_hits=1, iou_threshold=0.4)
 
     while zed.grab() == sl.ERROR_CODE.SUCCESS:
         # Retrieve left image
+        print('image retrieved')
         # if tf.test.is_gpu_available():
         #     zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.GPU, display_resolution)
+        #     zed.retrieve_image(image_cpu, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
         # else:
-        zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+        zed.retrieve_image(image_cpu, sl.VIEW.LEFT, sl.MEM.CPU, display_resolution)
+            # image_cpu = image.get_pointer()
         # Retrieve objects
         # zed.retrieve_objects(bodies, obj_runtime_param)
 
-        img = np.array(image.get_data()[:, :, :3])
+        img = np.array(image_cpu.get_data()[:, :, :3])
 
         img_resized, new_old_shape = resize_preserving_ar(img, input_shape_od_model)
+
+        print('inference centernet')
         detections, elapsed_time = detect(model, img_resized, min_score_thresh,
                                           new_old_shape)  # detection classes boxes scores
         # probably to draw on resized
@@ -267,6 +283,8 @@ def extract_keypoints_centernet(model, zed):
         # _________ extract hpe and print to img
         people_list = []
         vector_list = []
+
+        print('inferece hpe')
 
         for j, kpt_person in enumerate(kpt):
             yaw, pitch, roll, tdx, tdy = hpe(gaze_model, kpt_person, detector='centernet')
@@ -292,12 +310,20 @@ def extract_keypoints_centernet(model, zed):
         interaction_matrix = LAEO_computation(people_list, clipping_value=clip_uncertainty, clip=binarize_uncertainty)
         # coloured arrow print per person
         #TODO coloured arrow print per person
+
+        print('before cv2')
+
         for index, person in enumerate(people_list):
             green = round((max(interaction_matrix[index, :])) * 255)
             colour = (0, green, 0)
             vector = project_ypr_in2d(person['yaw'], person['pitch'], person['roll'])
             img = visualize_vector(img, person['center_xy'], vector, title="", color=colour)
-        cv2.imshow('bb', img)
+        cv2.namedWindow('MaLGa Lab Demo', cv2.WINDOW_NORMAL)
+        cv2.imshow('MaLGa Lab Demo', img)
+        # cv2.resizeWindow('MaLGa Lab Demo', 400, 400)
+
+        print('after cv2')
+
         try:
             laeo_1, laeo_2 = (np.unravel_index(np.argmax(interaction_matrix, axis=None), interaction_matrix.shape))
             # print something around face
@@ -315,7 +341,8 @@ def extract_keypoints_centernet(model, zed):
         # _, violate, couple_points = compute_distance(XYZ, min_distance)
         # img_with_violations = draw_detections(img, detections, max_boxes_to_draw, violate, couple_points)
 
-    image.free(sl.MEM.CPU)
+    print('image free GPU/CPU')
+    image_cpu.free(sl.MEM.CPU)
     # image.free(sl.MEM.GPU)
     cv2.destroyAllWindows()
 
@@ -350,22 +377,29 @@ if __name__ == "__main__":
     # choose the keypoints extractor algorithm and run it on every frame, here the program remains until finished
     if str(config.model).lower() == 'zed':
         print('start zedcam keypoint extractor')
+        print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
         extract_keypoints_zedcam(zed=zed)  # everything performed with stereolabs SDK
     elif str(config.model).lower() == 'centernet':
         print('start centernet keypoint extractor')
         # path_to_model = '/media/DATA/Users/Federico/centernet_hg104_512x512_kpts_coco17_tpu-32'
         # path to your centernet model: https://tfhub.dev/tensorflow/centernet/resnet50v2_512x512/1
-        path_to_model = '/media/memory/centernet_hg104_512x512_kpts_coco17_tpu-32'
+        path_to_model = '/home/federico/Documents/Models_trained/keypoint_detector/centernet_hg104_512x512_kpts_coco17_tpu-32'
         if not os.path.isdir(path_to_model):
-            path_to_model = '/media/DATA/Users/Federico/centernet_hg104_512x512_kpts_coco17_tpu-32'
+            path_to_model = '/home/federico/Documents/Models_trained/keypoint_detector/centernet_hg104_512x512_kpts_coco17_tpu-32'
             if not os.path.isdir(path_to_model):
                 raise IOError('path for model is incorrect, cannot find centernet model')
 
-        tf.keras.backend.clear_session()
-        path_to_model = tf.saved_model.load(os.path.join(path_to_model, 'saved_model'))
+        # tf.keras.backend.clear_session()
+
+        print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+        # gpus = tf.config.list_physical_devices('GPU')
+
+        # with tf.device(gpus[0]):
+
         # path_to_model = tf.compat.v1.saved_model.load(os.path.join(path_to_model, 'saved_model'))
         print('start centernet')
-        extract_keypoints_centernet(path_to_model, zed)
+        gaze_model_path = '/home/federico/Documents/Models_trained/head_pose_estimation'
+        extract_keypoints_centernet(path_to_model, zed, gaze_model_path=gaze_model_path)
     elif str(config.model).lower() == 'openpose':
         print('openpose')
         raise NotImplementedError

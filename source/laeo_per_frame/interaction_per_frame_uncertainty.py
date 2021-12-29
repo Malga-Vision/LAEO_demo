@@ -112,6 +112,7 @@ def delete_file_if_exist(*file_path):
 
 
 def LAEO_computation(people_list, clipping_value, clip):
+    #TODO here correct the average because -> 0+0.99-> LAEO
     people_in_frame = len(people_list)
 
     # create empty matrix with one entry per person in frame
