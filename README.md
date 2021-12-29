@@ -1,13 +1,14 @@
 # LAEO DEMO
-
-HW Requirements:
-- ZEDCAM
-- GPU
-
+### Author: Federico Figari Tomenotti <br />
+<br />
+HW Requirements: <br />
+- ZEDCAM <br />
+- GPU (CPU it is fine for some features) <br />
+<br />
 Software:
 - Look at the requirements file
 
-
+<br /><br />
 This program can be run using:
 - demo_start.py\
             -m zed\
@@ -19,3 +20,4 @@ This program can be run using:
 **m**: identifies the keypoints extractor algorithm\
 **f**: a pre-recorded zedcam file, .svo format
 
+The models can't be uploaded on github
