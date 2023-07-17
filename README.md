@@ -1,6 +1,7 @@
 # LAEO DEMO
-### Author: Federico Figari Tomenotti <br />
+### Author: [Federico Figari Tomenotti](https://github.com/Fede1995) <br />
 <br />
+
 HW Requirements: <br />
 - ZEDCAM <br />
 - GPU (CPU it is fine for some features) <br />
